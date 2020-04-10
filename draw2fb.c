@@ -21,7 +21,6 @@
 
 /**
  * Draw a font using libfreetype and then write to fb assuming it is 1bpp
- * @todo buffer sizes should be based on W/H supplied, use malloc
  * @todo output format should be configurable
  * @todo add support for pitch != width in the output buffer
  */
@@ -29,42 +28,50 @@ int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 	FT_Library ft;
 	FT_GlyphSlot g;
 	FT_Face face;
-	FT_Pos maxAscent, minDescent;
+	FT_Pos maxAscent = 0, minDescent = 0;
 	uint8_t curChar;
-	uint8_t fb8[1024*8];
+	uint8_t *fb8;
 	uint8_t prevChar = '\0';
 	int x, y;
 	int i, k;
 	int xp, yp;
 	int yo;
 	int lineheight;
+	int retval = 0;
 
-	memset(fb8, 0, sizeof(fb8));
+	// This implies 1bpp and would need to be updated
+	fb8 = calloc(8, config->W * config->H / 8);
 
 	if (FT_Init_FreeType(&ft)) {
 		fprintf(stderr, "Unable to initialize FreeType library!\n");
-		return 1;
+		free(fb8);
+		retval = 1;
+		goto done;
 	}
 
 	if (FT_New_Face(ft, config->font, 0, &face)) {
 		fprintf(stderr, "Unable to load font %s\n", config->font);
-		return 1;
+		retval = 1;
+		goto done;
 	}
 
-	FT_Set_Pixel_Sizes(face, 0, config->fontSize);
+	FT_Set_Pixel_Sizes(face, config->fontSize, config->fontSize);
 	g = face->glyph;
 
 	for (curChar = MIN_GLYPH; curChar < MAX_GLYPH; ++curChar) {
 		FT_Pos pixelBearing;
+		int descent;
 
 		if (FT_Load_Char(face, curChar, FT_LOAD_RENDER)) {
 			fprintf(stderr, "Could not load character %c\n", curChar);
-			return 1;
+			retval = 1;
+			goto done;
 		}
 
 		pixelBearing = FIX_TO_PIXELS(g->metrics.horiBearingY);
+		descent = pixelBearing - g->bitmap.rows;
 		maxAscent = (pixelBearing > maxAscent) ? pixelBearing : maxAscent;
-		minDescent = (minDescent > pixelBearing - g->bitmap.rows) ? pixelBearing - g->bitmap.rows : minDescent;
+		minDescent = (descent < minDescent) ? descent : minDescent;
 	}
 
 	lineheight = maxAscent - minDescent;
@@ -83,7 +90,8 @@ int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 
 		if (curChar < MIN_GLYPH || curChar > MAX_GLYPH) {
 			fprintf(stderr, "Cannot print character %c yet! Update the source if this glyph is needed.\n", curChar);
-			return 1;
+			retval = 1;
+			goto done;
 		}
 
 		FT_Load_Char(face, curChar, FT_LOAD_RENDER);
@@ -130,11 +138,11 @@ int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 	}
 
 	if (!config->overdraw) {
-		memset(fb, 0, 1024);
+		memset(fb, 0, config->W * config->H / 8);
 	}
 
 	// Pack the buffer we drew into single pixels
-	for (i = 0; i < 1024; ++i) {
+	for (i = 0; i < config->W * config->H / 8; ++i) {
 		for (k = 0; k < 8; ++k) {
 			uint8_t byte = fb8[i*8 + k];
 			uint8_t bit = (byte & 0x80) >> 7;
@@ -142,6 +150,8 @@ int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 		}
 	}
 
-	return 0;
+done:
+	free(fb8);
+	return retval;
 }
 
