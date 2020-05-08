@@ -124,9 +124,19 @@ int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 
 		yo = maxAscent - g->bitmap_top;
 		yp = 0;
-		while (y + yp < config->H && yp < g->bitmap.rows) {
+		while ((y + yp + yo) < config->H && yp < g->bitmap.rows) {
+			if ((y + yp + yo) < 0) {
+				yp += 1;
+				continue;
+			}
+
 			xp = 0;
 			while (x + xp < config->W && xp < g->bitmap.width) {
+				if (x + xp < 0) {
+					xp += 1;
+					continue;
+				}
+
 				fb8[x+xp + (y+yo+yp)*config->W] = g->bitmap.buffer[xp + yp*g->bitmap.pitch];
 				xp += 1;
 			}
