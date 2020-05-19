@@ -38,7 +38,7 @@ int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 	int lineheight;
 	int retval = 0;
 
-	// This implies 1bpp and would need to be updated
+	// Allocate a temporary framebuffer with 1 byte per pixel
 	fb8 = calloc(8, config->W * config->H / 8);
 
 	if (FT_Init_FreeType(&ft)) {
