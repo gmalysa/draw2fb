@@ -22,7 +22,6 @@
 /**
  * Draw a font using libfreetype and then write to fb assuming it is 1bpp
  * @todo output format should be configurable
- * @todo add support for pitch != width in the output buffer
  */
 int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 	FT_Library ft;
@@ -148,16 +147,21 @@ int draw2fb_string(struct draw2fb_opts_t *config, char *str, uint8_t *fb) {
 	}
 
 	if (!config->overdraw) {
-		memset(fb, 0, config->W * config->H / 8);
+		memset(fb, 0, config->pitch * config->H);
 	}
 
-	// Pack the buffer we drew into single pixels
-	for (i = 0; i < config->W * config->H / 8; ++i) {
-		for (k = 0; k < 8; ++k) {
-			uint8_t byte = fb8[i*8 + k];
+	// Pack the internal buffer into the output buffer
+	k = 0;
+	for (y = 0; y < config->H; ++y) {
+		for (x = 0; x < config->W; ++x) {
+			uint8_t byte = fb8[y * config->W + x];
 			uint8_t bit = (byte & 0x80) >> 7;
-			fb[i] |= (bit << k);
+
+			fb[x/8] |= (bit << k);
+
+			k = (k + 1) & 7;
 		}
+		fb += config->pitch;
 	}
 
 done:
